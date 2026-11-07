@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="单利玲产品设计作品集首屏：DESIGN IN MOTION" />
+  <title>DESIGN IN MOTION — 单利玲</title>
+  <style>
+    /* 单文件首屏：只使用合成层友好的 transform / opacity，减少滚动期间的布局与重绘。 */
+    :root { --paper: #f3f0e9; --ink: #171817; --muted: #76766f; --lime: #b9df4f; --line: rgba(23,24,23,.16); }
+    * { box-sizing: border-box; }
+    html { background: var(--paper); scroll-behavior: auto; }
+    body { min-width: 320px; margin: 0; overflow-x: hidden; color: var(--ink); background: var(--paper); font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; }
+    button { font: inherit; }
+    .skip { position: fixed; z-index: 20; top: 12px; left: 12px; padding: 10px 14px; color: var(--paper); background: var(--ink); transform: translateY(-150%); }
+    .skip:focus { transform: translateY(0); }
+
+    /* 被 pin 的舞台保持纯粹；子元素承担一切 3D 变换。 */
+    .intro { position: relative; min-height: 100svh; overflow: clip; isolation: isolate; }
+    .frame { position: relative; z-index: 2; width: min(100% - 64px, 1440px); min-height: 100svh; margin: 0 auto; padding: 28px 0 30px; display: grid; grid-template-rows: auto 1fr auto; pointer-events: none; }
+    .topbar a, .menu, .wheel-controls, .wheel-controls button { pointer-events: auto; }
+    .topbar, .footer-line { display: flex; align-items: center; justify-content: space-between; gap: 22px; }
+    .mark, .eyebrow, .footer-line, .project-kicker { font-size: 10px; font-weight: 700; line-height: 1; letter-spacing: .13em; text-transform: uppercase; }
+    .mark { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+    .mark::before { width: 10px; height: 10px; border: 1.5px solid currentColor; border-radius: 50%; content: ""; }
+    .menu { display: flex; gap: 22px; }
+    .menu a { position: relative; padding: 6px 0; color: var(--ink); font-size: 11px; text-decoration: none; }
+    .menu a::after { position: absolute; right: 0; bottom: 1px; left: 0; height: 1px; background: currentColor; content: ""; transform: scaleX(0); transform-origin: right; transition: transform .3s ease; }
+    .menu a:hover::after, .menu a:focus-visible::after { transform: scaleX(1); transform-origin: left; }
+
+    .intro-copy { align-self: start; max-width: 840px; padding-top: clamp(38px, 6vh, 54px); pointer-events: none; }
+    .eyebrow { display: flex; align-items: center; gap: 9px; color: #5f615b; }
+    .eyebrow::before { width: 7px; height: 7px; border-radius: 50%; background: var(--lime); content: ""; }
+    h1 { max-width: 820px; margin: 18px 0 0; font-size: clamp(3.7rem, 8.3vw, 8.5rem); font-weight: 550; line-height: .82; letter-spacing: -.085em; }
+    h1 span { display: block; }
+    h1 span:last-child { padding-left: .48em; color: #5e605a; }
+    .summary { max-width: 320px; margin: 26px 0 0; color: #5a5c56; font-size: 13px; line-height: 1.75; }
+    .scroll-cue { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); }
+    .scroll-cue::before { width: 38px; height: 1px; background: var(--ink); content: ""; }
+    .counter { color: var(--muted); }
+
+    /* 卡片以同一个中心点为原点，在保留 3D 的舞台内由 GSAP 沿内凹弧线排布。 */
+    .gallery { position: absolute; z-index: 1; inset: 0; overflow: hidden; pointer-events: none; perspective: 1500px; perspective-origin: 50% 48%; touch-action: pan-y; }
+    .gallery-track { position: absolute; inset: 0; transform-style: preserve-3d; }
+    .gallery-card { position: absolute; top: 71%; left: 50%; display: block; width: clamp(180px, 19vw, 292px); aspect-ratio: .72; border: 0; padding: 0; color: inherit; background: transparent; cursor: pointer; opacity: var(--card-opacity); pointer-events: auto; transform: translate3d(var(--card-x), var(--card-y), var(--card-z)) translate(-50%, -50%) rotateY(var(--card-angle)) scale(var(--card-scale)); transform-style: preserve-3d; transition: opacity .4s ease, transform .58s cubic-bezier(.22,.72,.2,1); will-change: transform, opacity; }
+    .gallery-card:focus-visible { outline: 2px solid var(--ink); outline-offset: 5px; }
+    .card-face { position: absolute; inset: 0; overflow: hidden; border: 1px solid rgba(255,255,255,.62); border-radius: 15px; background: #252824; box-shadow: 0 28px 50px rgba(30,31,28,.18), inset 0 1px rgba(255,255,255,.4); backface-visibility: hidden; }
+    .card-face::before { position: absolute; z-index: 2; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,.32), transparent 34%, rgba(0,0,0,.22)); content: ""; pointer-events: none; }
+    .card-face img { width: 100%; height: 100%; display: block; object-fit: cover; filter: saturate(.75) contrast(.95); transform: scale(1.03); }
+    .card-face--cookie img { object-position: 50% 30%; }
+    .card-face--shengjing img { object-fit: cover; object-position: 50% 50%; }
+    .card-meta { position: absolute; z-index: 3; right: 14px; bottom: 13px; left: 14px; display: flex; justify-content: space-between; gap: 10px; color: #fff; text-shadow: 0 1px 7px rgba(0,0,0,.42); }
+    .card-meta strong { font-family: Georgia, "Songti SC", serif; font-size: 16px; font-weight: 400; letter-spacing: -.04em; }
+    .card-meta span { font-size: 8px; font-weight: 700; letter-spacing: .1em; }
+    .gallery-card--focus .card-face { outline: 2px solid rgba(185,223,79,.85); outline-offset: -2px; }
+    .gallery-card--focus .card-face img { filter: saturate(.9) contrast(1); }
+    .wheel-controls { display: flex; align-items: center; gap: 16px; }
+    .wheel-controls button { display: grid; width: 31px; height: 31px; place-items: center; border: 1px solid rgba(23,24,23,.28); border-radius: 50%; color: inherit; background: transparent; cursor: pointer; transition: color .2s, background .2s, transform .2s; }
+    .wheel-controls button:hover { color: var(--paper); background: var(--ink); transform: scale(1.06); }
+    .wheel-controls button:active { transform: scale(.96); }
+
+    .project-kicker { position: absolute; z-index: 4; top: 18%; right: clamp(22px, 6vw, 92px); color: var(--ink); writing-mode: vertical-rl; }
+    .project-kicker i { display: block; width: 1px; height: 64px; margin: 12px auto 0; background: var(--ink); }
+    .credit { position: absolute; z-index: 3; left: 0; bottom: 0; width: 100%; height: 8vh; background: linear-gradient(transparent, rgba(243,240,233,.92) 78%, var(--paper)); pointer-events: none; }
+
+    /* Native dialog stays in the browser top layer, above the pinned 3D stage. */
+    .project-dialog { position: fixed; inset: 0; width: min(1120px, calc(100% - 48px)); max-width: none; max-height: min(760px, calc(100% - 48px)); overflow: auto; border: 1px solid rgba(255,255,255,.5); border-radius: 4px; padding: clamp(18px, 3vw, 36px); color: var(--ink); background: var(--paper); box-shadow: 0 35px 120px rgba(0,0,0,.28); }
+    .project-dialog[open] { transform-origin: calc(50% + var(--zoom-origin-x, 0px)) calc(50% + var(--zoom-origin-y, 0px)); animation: dialog-in .48s cubic-bezier(.2,.78,.16,1.02) both; }
+    .project-dialog::backdrop { background: rgba(12,13,12,.74); backdrop-filter: blur(8px); }
+    .dialog-top { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 22px; color: #646660; font: 10px/1.4 ui-monospace, monospace; letter-spacing: .1em; }
+    .dialog-top button { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid rgba(23,24,23,.24); border-radius: 50%; color: inherit; background: transparent; cursor: pointer; font-size: 25px; line-height: 1; }
+    .dialog-top button:hover { color: var(--paper); background: var(--ink); }
+    .dialog-grid { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(280px,.8fr); gap: clamp(26px,5vw,68px); align-items: center; }
+    .dialog-art { display: grid; min-height: 360px; max-height: 590px; place-items: center; overflow: hidden; background: #e7e1d6; }
+    .dialog-art img, .dialog-art video { display: block; width: 100%; max-height: 590px; object-fit: contain; }
+    .dialog-gallery { display: grid; width: 100%; height: min(590px, 62vh); min-height: 280px; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .dialog-gallery img { width: 100%; height: 100%; min-width: 0; object-fit: contain; background: #d9d3c8; }
+    .dialog-copy-kicker { margin: 0 0 16px; color: #73756d; font: 9px/1.4 ui-monospace, monospace; letter-spacing: .14em; }
+    .dialog-copy h2 { margin: 0; font-family: Georgia, "Songti SC", serif; font-size: clamp(34px,4vw,56px); font-weight: 400; letter-spacing: -.06em; }
+    .dialog-type { margin: 9px 0 24px; color: #74766f; font-size: 12px; }
+    .dialog-highlight { max-width: 35em; margin: 0; font-size: 15px; line-height: 1.85; }
+    .dialog-copy h3 { margin: 31px 0 13px; font: 10px/1.4 ui-monospace, monospace; letter-spacing: .12em; }
+    .dialog-copy ul { display: grid; gap: 11px; margin: 0; padding: 0; list-style: none; }
+    .dialog-copy li { position: relative; padding-left: 18px; color: #555750; font-size: 12px; line-height: 1.7; }
+    .dialog-copy li::before { position: absolute; top: .68em; left: 0; width: 6px; height: 6px; border-radius: 50%; background: #9abc43; content: ""; }
+    .dialog-nav { display: flex; justify-content: space-between; gap: 14px; margin-top: 34px; border-top: 1px solid rgba(23,24,23,.16); padding-top: 17px; }
+    .dialog-nav button { border: 0; padding: 8px 0; color: var(--ink); background: transparent; cursor: pointer; font-size: 11px; }
+    .dialog-nav button:hover { color: #788e3e; }
+    @keyframes dialog-in { from { opacity: 0; transform: scale(.54); } to { opacity: 1; transform: scale(1); } }
+
+    .after { min-height: 80vh; padding: 15vh max(32px, calc((100vw - 1440px) / 2)); background: #171817; color: var(--paper); }
+    .after p { max-width: 34em; color: #c8c9c1; font-size: clamp(1.1rem, 2vw, 1.6rem); line-height: 1.65; }
+    .after a { display: inline-flex; margin-top: 24px; color: #171817; background: var(--lime); padding: 14px 18px; font-size: 13px; font-weight: 700; text-decoration: none; transition: transform .2s ease; }
+    .after a:hover { transform: translateY(-2px); }
+
+    @media (max-width: 720px) {
+      .frame { width: min(100% - 36px, 1440px); padding-top: 20px; }
+      .menu { display: none; }
+      .intro-copy { align-self: start; padding-top: 8svh; }
+      h1 { font-size: clamp(3.45rem, 18vw, 5.2rem); line-height: .86; }
+      h1 span:last-child { padding-left: .22em; }
+      .summary { margin: 22px 0 0 0; }
+      .gallery { perspective: 920px; perspective-origin: 50% 55%; }
+      .gallery-card { top: 56%; width: clamp(150px, 47vw, 210px); }
+      .project-kicker { top: 62%; right: 12px; }
+      .footer-line { align-items: end; }
+      .footer-line .scroll-cue { font-size: 9px; }
+      .counter { display: none; }
+      .wheel-controls { gap: 8px; }
+      .wheel-controls button { width: 28px; height: 28px; }
+      .project-dialog { width: calc(100% - 24px); max-height: calc(100% - 24px); padding: 16px; }
+      .dialog-top { margin-bottom: 15px; font-size: 8px; }
+      .dialog-grid { grid-template-columns: 1fr; gap: 19px; }
+      .dialog-art { min-height: 190px; max-height: 34svh; }
+      .dialog-art img, .dialog-art video { max-height: 34svh; }
+      .dialog-gallery { height: 34svh; min-height: 190px; gap: 6px; }
+      .dialog-copy-kicker { margin-bottom: 8px; }
+      .dialog-copy h2 { font-size: 34px; }
+      .dialog-type { margin: 5px 0 12px; }
+      .dialog-highlight { font-size: 13px; line-height: 1.65; }
+      .dialog-copy h3 { margin: 18px 0 8px; }
+      .dialog-copy ul { gap: 6px; }
+      .dialog-copy li { font-size: 11px; }
+      .dialog-nav { margin-top: 15px; padding-top: 9px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#portfolio">跳到作品集</a>
+
+  <main id="portfolio">
+    <section class="intro" aria-labelledby="page-title">
+      <div class="gallery" role="group" aria-roledescription="作品轮盘" aria-label="精选作品轮盘，可左右滑动切换">
+        <div class="gallery-track">
+        </div>
+      </div>
+      <div class="project-kicker">SELECTED WORK<i></i></div>
+      <div class="credit" aria-hidden="true"></div>
+
+      <div class="frame">
+        <header class="topbar">
+          <a class="mark" href="./">SHAN LILING</a>
+          <nav class="menu" aria-label="页面导航"><a href="./">Portfolio</a><a href="./#about">About</a><a href="./#contact">Contact</a></nav>
+        </header>
+        <div class="intro-copy">
+          <p class="eyebrow">Product design portfolio · 2026</p>
+          <h1 id="page-title"><span>DESIGN</span><span>IN MOTION</span></h1>
+          <p class="summary">以产品思维组织体验，用视觉语言把想法变成可感知的设计。</p>
+        </div>
+        <div class="footer-line"><span class="scroll-cue">点选作品 · 左右切换</span><div class="wheel-controls"><button type="button" data-direction="-1" aria-label="上一个作品">←</button><span class="counter">01 — 06</span><button type="button" data-direction="1" aria-label="下一个作品">→</button></div></div>
+      </div>
+    </section>
+
+    <dialog class="project-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-top"><span class="dialog-index"></span><button type="button" data-close aria-label="关闭作品详情">×</button></div>
+      <div class="dialog-grid">
+        <div class="dialog-art"></div>
+        <div class="dialog-copy">
+          <p class="dialog-copy-kicker">PROJECT NOTES</p>
+          <h2 id="dialog-title"></h2>
+          <p class="dialog-type"></p>
+          <p class="dialog-highlight"></p>
+          <h3>设计亮点</h3>
+          <ul></ul>
+          <div class="dialog-nav"><button type="button" data-direction="-1">← 上一个作品</button><button type="button" data-direction="1">下一个作品 →</button></div>
+        </div>
+      </div>
+    </dialog>
+
+    <section class="after" aria-label="进入完整作品集">
+      <p>滚动完成后，进入单利玲的课程、团队与参赛作品。</p>
+      <a href="./">查看完整作品集 →</a>
+    </section>
+  </main>
+
+  <!-- GSAP + ScrollTrigger：CDN 按需加载，便于这个文件独立预览。 -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
+  <script>
+    (() => {
+      // Add one object here for each new project; the carousel count and layout derive from this list.
+      const projects = [
+        { no: '01', layout: 'film', type: '课程作品 / 影像', title: '课程影像作品', note: '独立完成', image: './media/course-film-poster.webp', video: './media/course-film-web.mp4', highlight: '用手部动作和木质纽扣建立清晰的视觉焦点，让制作过程本身成为影像叙事。', strengths: ['镜头围绕真实操作展开，主题一眼可读。', '暖色木质细节统一画面气质，视觉注意力集中。', '静态构图与动态过程结合，适合以视频完整呈现。'] },
+        { no: '02', layout: 'cookie', type: '黑客松 / 团队项目', title: '饼干有诈', note: '海报与卡牌设计', image: './media/cookie-poster.webp', detail: './media/cookie-cards.jpg', highlight: '把女巫角色、饼干造型和游戏氛围组织成一套鲜明的主题视觉。', strengths: ['角色与道具围绕同一个主题，识别度高。', '活泼配色让海报在缩略图中也很醒目。', '角色卡牌延续海报的视觉语言，组成主题统一的游戏视觉系统。'] },
+        { no: '03', layout: 'shengjing', type: '课程作业 / 视觉设计', title: '盛京丝路', note: '城市文化主题视觉', image: './media/shengjing-panorama.webp', detail: './media/shengjing-board.webp', highlight: '将盛京建筑、山水与丝路意象汇入一幅层次丰富的城市主题画面。', strengths: ['建筑主体明确，观者视线有清晰落点。', '山水、云纹与人物共同补充地域叙事。', '暖色调和层叠构图让传统意象更有沉浸感。'] },
+        { no: '04', layout: 'hazelnut', type: '参赛作品 / 包装设计', title: '桓仁大榛子', note: '产品包装与视觉系统', image: './media/hazelnut-board.webp', highlight: '从地方物产出发，把榛子、山林和产品包装整理成一组连贯的视觉表达。', strengths: ['插画把产品与地域景观联系起来。', '包装效果、色彩和图形元素呈现为可识别的一套系统。', '同时展示产品应用与视觉规范，设计思路更完整。'] },
+        { no: '05', layout: 'illustration', type: '插画 / 视觉练习', title: '街景人物插画', note: '城市空间与人物动态', image: './media/street-illustration.jpg', highlight: '以仰视的人物动作作为画面中心，将人物、街道透视与城市建筑组织在同一构图中。', strengths: ['夸张的人物动作形成明确的视觉焦点。', '高楼透视把视线引向画面中心，增强空间纵深。', '手绘线条与色彩保留了草图探索的过程感。'] },
+        { no: '06', layout: 'carnival', type: 'IP / 主题视觉探索', title: '夏日嘉年华视觉', note: '角色与活动场景概念', image: './media/summer-carnival-color.jpg', detail: './media/summer-carnival-sketch.jpg', highlight: '围绕夏日嘉年华主题塑造可爱的角色形象，并将角色放入有烟花、摩天轮与彩虹的节庆场景。', strengths: ['大比例角色与小型配角形成清楚的画面层级。', '烟花、摩天轮和彩虹共同强化嘉年华氛围。', '同时呈现彩色效果与灰度探索稿，能看到视觉方向的变化。'] }
+      ];
+      const intro = document.querySelector('.intro');
+      const gallery = document.querySelector('.gallery');
+      const track = document.querySelector('.gallery-track');
+      const dialog = document.querySelector('.project-dialog');
+      const dialogArt = dialog.querySelector('.dialog-art');
+      const dialogTitle = dialog.querySelector('#dialog-title');
+      const dialogType = dialog.querySelector('.dialog-type');
+      const dialogHighlight = dialog.querySelector('.dialog-highlight');
+      const dialogIndex = dialog.querySelector('.dialog-index');
+      const dialogList = dialog.querySelector('.dialog-copy ul');
+      let activeIndex = 0;
+      let startX = null;
+      let wasSwipe = false;
+      let oldOverflow = '';
+
+      // Geometry is derived from each item's shortest distance to the active card.
+      function drawWheel() {
+        const total = projects.length;
+        const gap = window.innerWidth <= 720 ? 162 : Math.min(320, Math.max(230, window.innerWidth * .23));
+        const cards = projects.map((project, index) => {
+          let offset = (index - activeIndex + total) % total;
+          if (offset > total / 2) offset -= total;
+          const distance = Math.abs(offset);
+          const scale = distance === 0 ? 1.12 : distance === 1 ? .88 : .74;
+          const opacity = distance > 2 ? .06 : distance === 0 ? 1 : .82;
+          const button = document.createElement('button');
+          button.className = `gallery-card${distance === 0 ? ' gallery-card--focus' : ''}`;
+          button.type = 'button';
+          button.dataset.index = index;
+          button.setAttribute('aria-label', `查看作品：${project.title}`);
+          button.tabIndex = distance > 2 ? -1 : 0;
+          if (distance > 2) button.setAttribute('aria-hidden', 'true');
+          button.style.setProperty('--card-x', `${offset * gap}px`);
+          button.style.setProperty('--card-y', `${-distance * 18}px`);
+          button.style.setProperty('--card-z', `${distance * 34 - (distance === 0 ? 34 : 0)}px`);
+          button.style.setProperty('--card-angle', `${-offset * 24}deg`);
+          button.style.setProperty('--card-scale', scale);
+          button.style.setProperty('--card-opacity', opacity);
+          button.style.zIndex = total - distance;
+          button.style.pointerEvents = distance > 2 ? 'none' : 'auto';
+          const face = document.createElement('span');
+          face.className = `card-face card-face--${project.layout}`;
+          const image = document.createElement('img');
+          image.src = project.image;
+          image.alt = '';
+          const meta = document.createElement('span');
+          meta.className = 'card-meta';
+          const title = document.createElement('strong');
+          title.textContent = project.title;
+          const number = document.createElement('span');
+          number.textContent = `${project.no} / ${String(total).padStart(2, '0')}`;
+          meta.append(title, number);
+          face.append(image, meta);
+          button.append(face);
+          return button;
+        });
+        track.replaceChildren(...cards);
+        document.querySelector('.counter').textContent = `${String(activeIndex + 1).padStart(2, '0')} — ${String(total).padStart(2, '0')}`;
+      }
+
+      function drawDetails() {
+        const project = projects[activeIndex];
+        dialogIndex.textContent = `${project.no} / ${String(projects.length).padStart(2, '0')}　${project.type}`;
+        dialogTitle.textContent = project.title;
+        dialogType.textContent = project.note;
+        dialogHighlight.textContent = project.highlight;
+        dialogList.replaceChildren(...project.strengths.map((text) => { const item = document.createElement('li'); item.textContent = text; return item; }));
+        dialogArt.replaceChildren();
+        if (project.video) {
+          const visual = document.createElement('video');
+          visual.src = project.video;
+          visual.poster = project.image;
+          visual.controls = true;
+          visual.playsInline = true;
+          visual.preload = 'metadata';
+          dialogArt.append(visual);
+        } else {
+          const gallery = document.createElement('div');
+          gallery.className = 'dialog-gallery';
+          [project.image, project.detail].filter(Boolean).forEach((src) => {
+            const visual = document.createElement('img');
+            visual.src = src;
+            visual.alt = `${project.title}作品展示`;
+            gallery.append(visual);
+          });
+          dialogArt.append(gallery);
+        }
+      }
+
+      function move(step) {
+        activeIndex = (activeIndex + step + projects.length) % projects.length;
+        drawWheel();
+        if (dialog.open) drawDetails();
+      }
+
+      track.addEventListener('click', (event) => {
+        if (wasSwipe) return;
+        const card = event.target.closest('[data-index]');
+        if (!card) return;
+        const bounds = card.getBoundingClientRect();
+        dialog.style.setProperty('--zoom-origin-x', `${bounds.left + bounds.width / 2 - window.innerWidth / 2}px`);
+        dialog.style.setProperty('--zoom-origin-y', `${bounds.top + bounds.height / 2 - window.innerHeight / 2}px`);
+        activeIndex = Number(card.dataset.index);
+        drawWheel();
+        drawDetails();
+        oldOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        dialog.showModal();
+        dialog.querySelector('[data-close]').focus();
+      });
+      document.querySelectorAll('[data-direction]').forEach((button) => button.addEventListener('click', () => move(Number(button.dataset.direction))));
+      dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
+      dialog.addEventListener('close', () => { document.body.style.overflow = oldOverflow; });
+      dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+      document.addEventListener('keydown', (event) => {
+        if (!dialog.open && !gallery.contains(event.target)) return;
+        if (event.key === 'ArrowLeft') { event.preventDefault(); move(-1); }
+        if (event.key === 'ArrowRight') { event.preventDefault(); move(1); }
+      });
+      gallery.addEventListener('pointerdown', (event) => { if (event.button === 0) { startX = event.clientX; wasSwipe = false; } });
+      gallery.addEventListener('pointerup', (event) => {
+        if (startX === null) return;
+        const delta = event.clientX - startX;
+        if (Math.abs(delta) > 44) {
+          wasSwipe = true;
+          move(delta < 0 ? 1 : -1);
+          window.setTimeout(() => { wasSwipe = false; }, 350);
+        }
+        startX = null;
+      });
+      window.addEventListener('resize', drawWheel, { passive: true });
+      drawWheel();
+
+      // Keep wheel and detail functionality if a CDN is unavailable; only scroll animation is skipped.
+      if (!window.gsap || !window.ScrollTrigger) return;
+      gsap.registerPlugin(ScrollTrigger);
+      const mm = gsap.matchMedia();
+      mm.add({ desktop: '(min-width: 721px)', mobile: '(max-width: 720px)', reduce: '(prefers-reduced-motion: reduce)' }, ({ conditions }) => {
+        const { desktop, reduce } = conditions;
+        if (reduce) return;
+        const copy = document.querySelector('.intro-copy');
+        const footer = document.querySelector('.footer-line');
+        const timeline = gsap.timeline({ defaults: { ease: 'none' }, scrollTrigger: { trigger: intro, start: 'top top', end: () => '+=' + Math.round(window.innerHeight * 1.2), pin: true, scrub: .28, anticipatePin: 1, invalidateOnRefresh: true } });
+        timeline.to(copy, { y: -42, autoAlpha: .22, duration: .72 }, 0)
+          .to(footer, { y: 18, autoAlpha: 0, duration: .28 }, 0)
+          .to(track, { rotationY: desktop ? 14 : 7, rotationX: desktop ? -3 : -1, z: desktop ? 45 : 18, duration: 1 }, .08);
+        return () => timeline.kill();
+      });
+      window.addEventListener('load', () => ScrollTrigger.refresh(), { once: true });
+    })();
+  </script>
+</body>
+</html>
